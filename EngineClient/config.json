@@ -1,0 +1,6 @@
+{
+  "typeObj": "engine",
+  "host"   : "0.tcp.ap.ngrok.io",
+  "port"   : 11237,
+  "path"   : "D:\\Github\\EngineOnline\\Engine\\engine.exe"
+}

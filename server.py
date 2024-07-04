@@ -1,8 +1,15 @@
 import socket
 from threading import Thread
 from queue import Queue, Empty
-import cpuinfo
-import psutil
+
+
+def beautijson(jsdata, idx=0, exc=()):
+    for i in jsdata:
+        if i in exc:
+            continue
+        print(f'{"   " * idx}{i} {f"-> {jsdata[i]}" if not isinstance(jsdata[i], dict) else ""}')        
+        if isinstance(jsdata[i], dict):
+            beautijson(jsdata[i], idx=idx+1, exc=exc)
 
 
 class SocketQueue:
@@ -58,12 +65,13 @@ class Server:
                 client.recv(int(byte[4:8], 2)).decode(), \
                 client.recv(int(byte[8:19], 2)).decode()
         # Setup Obj
-        typeObj, obj, data = receive()
-        self.__manageClient.add(client, typeObj, obj)
+        _typeObj, _obj, _ = receive()
+        self.__manageClient.add(client, _typeObj, _obj)
 
         while True:
             try:
                 typeObj, obj, data = receive()
+                # print(f'typeObj: {typeObj} | obj: {obj} | data: {data}')
                 match typeObj:
                     case 'user':
                         if data == 'connect':
@@ -71,50 +79,72 @@ class Server:
                             typeObj, obj, _ = receive()
                             self.__manageClient.attach((typeObj, obj), myObj)
                             continue
-                        if self.__manageClient.get(typeObj, obj) is not None:
+                        elif self.__manageClient.get(typeObj, obj) is not None:
                             self.sendTo(self.__manageClient.get(typeObj, obj), data)
 
                     case 'engine':
+                        if data == 'setInfo':
+                            typeObj, obj, data = receive()
+                            self.__manageClient.setInfo(typeObj, obj, 'hardware', data)
+                            continue
                         self.sendTo(self.__manageClient.get(typeObj, obj), data)
 
             except Exception as e:
                 print(f'[handleClientConnection: {e}]')
                 client.close()
+                del self.__manageClient.getClientDict()[_typeObj][_obj]
                 break
 
     def interact(self):
         while True:
-            msg = input('Type input: ')
-            if msg == 'show':
-                self.__manageClient.display()
+            msg = input().strip().split()
+            try:
+                match msg:
+                    case ['show', typeObj]:
+                        self.__manageClient.display(typeObj)
+            except:
+                continue                
 
 
 class ManageClient:
     def __init__(self):
-        self._clientDict : {str : {str : socket.socket}} = {}
+        self.__clientDict : {str : {str : socket.socket}} = {} # type: ignore
 
     def add(self, client: socket.socket, typeObj: str, obj):
-        self._clientDict[typeObj] = {obj: {'client'  : client,
-                                           'hardware': f"{cpuinfo.get_cpu_info()['brand_raw']} "
-                                                       f"[{psutil.cpu_count()} threads]",
+        self.__clientDict[typeObj] = {obj: {'client'  : client,
+                                           'hardware': "",
                                            'child'   : None}}
 
     def get(self, typeObj, obj):
         if typeObj == 'engine':
-            return self._clientDict[typeObj][obj]['client']
+            return self.__clientDict[typeObj][obj]['client']
         elif typeObj == 'user':
-            return self._clientDict['engine'][obj]['child']
+            return self.__clientDict['engine'][obj]['child']
 
     def __getObj(self, typeObj, obj) -> dict:
-        return self._clientDict[typeObj][obj]
+        return self.__clientDict[typeObj][obj]
+    
+    def getClientDict(self) -> dict:
+        return self.__clientDict
 
     def attach(self, engine: tuple, user: tuple):
         self.__getObj(engine[0], engine[1])['child'] = self.__getObj(user[0], user[1])['client']
 
-    def display(self):
+    def setInfo(self, typeObj, obj, key, info):
+        self.__getObj(typeObj, obj)[key] = info
+
+    def display(self, typeObj='engine'):
         print('[+] Display')
-        print(self._clientDict)
+        beautijson(self.__clientDict[typeObj], exc=('client', 'child'))
 
 
-server = Server('192.168.16.100', 9000)
-server.interact()
+def main():
+    host = input('Host: ')
+    port = int(input('Port: ').strip())
+    server = Server(host, port)
+    server.interact()
+
+
+if __name__ == '__main__':
+    main()
+    

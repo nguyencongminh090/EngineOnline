@@ -26,7 +26,7 @@ class StdoutReader:
             elif line is None:
                 break
             else:
-                print('Debug:', line)
+                print('OUT:', line)
                 self.__stdout(line)
 
 
@@ -48,5 +48,4 @@ class Engine:
             else:
                 new_command.append(str(command[i]))
         command = ' '.join(new_command)
-        print(f'[<-] [{command}]')
         self.__engine.stdin.write(command + '\n')
